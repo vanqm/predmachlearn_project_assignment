@@ -1,0 +1,139 @@
+---
+title: "Predict the maner by using Human Activity Recognition"
+author: "Van Mai"
+date: "Sunday, May 17, 2015"
+output: html_document
+---
+
+
+
+
+#### The Goal ####
+The goal of this project is to predict the manner in which the people did the exercise. This is the "classe" variable in the training set.
+
+
+
+
+#### The Data ####
+More information is available from the website [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har)
+
+The training data for this project are available here: 
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The test data are available here: 
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
+
+
+
+
+#### The Exericise ####
+
+#####Load the data#####
+```{r}
+## Read the training and testing data
+trainingSrc <- read.csv("pml-training.csv", na.strings = c("", "NA", "NULL"))
+testingSrc <- read.csv("pml-testing.csv", na.strings = c("", "NA", "NULL"))
+dim(trainingSrc);
+dim(testingSrc);
+```
+
+
+
+#####Tiding the data#####
+
+I think we should use the variables that not have NA value to model. I will use **colSums(is.na(the_variable))** to count the number of NA value in variable.
+```{r}
+trainingSrc <- trainingSrc[, colSums(is.na(trainingSrc)) == 0]
+dim(trainingSrc)
+```
+
+Not use the un-relate variable "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"
+```{r}
+colNamesRemove <- c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+trainingSrc <- trainingSrc[, - which(names(trainingSrc) %in% colNamesRemove)]
+dim(trainingSrc)
+```
+
+
+##### Plit trainingSrc to training and testing for cross validation #####
+
+```{r}
+## 60% training - 40% testing
+library(caret)
+set.seed(112357)
+inTrain <- createDataPartition(trainingSrc$classe, p = 0.6, list = FALSE)
+training <- trainingSrc[inTrain, ]
+testing <- trainingSrc[-inTrain, ]
+
+## use training to model
+#data <- training[, 1:20]
+#class <- training$classe
+```
+
+
+##### Use method "rpart" #####
+
+```{r}
+modFitRPart <- train(classe ~ ., method = "rpart", data = training)
+#modFit <- rpart(classe ~ ., data = training)
+print(modFitRPart$finalModel)
+```
+
+Prettier plots
+```{r}
+library(rattle)
+fancyRpartPlot(modFitRPart$finalModel)
+```
+
+Use **modFitRPart** to predict the **testing** data and look the accuracy
+```{r}
+preRPart <- predict(modFitRPart, newdata = testing)
+## The accuracy of method "rpart"
+confMatrix <- confusionMatrix(preRPart, testing$classe)
+confMatrix$overall[1]
+```
+The accuracy of **rpart** method is 0.4895488. It is too small to get the dicision.
+
+##### Use method "Random Forest" #####
+
+```{r}
+require(randomForest)
+modFitRF <- randomForest(classe ~ ., data = training)
+print(modFitRF)
+# plot the importance of variables
+varImpPlot(modFitRF)
+```
+
+Use **modFitRF** to predict the **testing** and see the accuracy
+```{r}
+preRF <- predict(modFitRF, newdata = testing)
+## The accuracy of method "rf"
+confMatrix <- confusionMatrix(preRF, testing$classe)
+confMatrix$overall[1]
+```
+The accuracy of Random Forest method is 0.9919704
+
+
+#### Conclusion ####
+The accuracy of Random Forest method is 0.9919704. So I will use Random Forest method to predict the valuse of **classe**
+
+Use **modFitRF** to predict the result of *testingSrc*
+```{r}
+dim(testingSrc)
+predTestingSrc <- predict(modFitRF, newdata = testingSrc)
+print(predTestingSrc);
+
+## use predTestingSrc to generate the answers for submision project
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file=filename, quote=FALSE, row.names=FALSE, col.names=FALSE)
+    }
+}
+pml_write_files(predTestingSrc)
+```
+
+
